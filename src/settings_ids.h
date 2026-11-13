@@ -1,0 +1,7 @@
+#pragma once
+#define IDD_SETTINGS 101
+#define IDD_PROGRESS 102
+#define IDC_MODEL 1001
+#define IDC_STATUS 1002
+#define IDC_PROGRESS 1003
+#define IDC_DIAGNOSTICS 1004

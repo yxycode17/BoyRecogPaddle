@@ -1,0 +1,13 @@
+.vs/
+.venv/
+build/
+build-x86/
+out/
+downloads/
+third_party/
+*.user
+*.suo
+__pycache__/
+dist/*
+!dist/发布说明.md
+!dist/info.json

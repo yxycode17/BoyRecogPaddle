@@ -1,0 +1,8 @@
+LIBRARY BoyRecogPaddle
+EXPORTS
+    BoyRecogInit
+    BoyRecogUninit
+    BoyRecogGetEngineList
+    BoyRecogOcrText
+    BoyRecogOcrItems
+    BoyRecogSettings

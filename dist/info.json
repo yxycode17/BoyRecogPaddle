@@ -1,0 +1,11 @@
+{
+  "type": "recognition_plugin",
+  "name": "BoyRecogPaddle",
+  "variant": "",
+  "displayName": "百度飞桨",
+  "description": "基于 PaddleOCR 的本地文字识别插件，提供 PaddleOCR 引擎，支持 PNG 图片文字识别和文字位置返回。默认附带 PP-OCRv6 small 模型，可在设置中选择并下载 v6 tiny、medium 或 v5 mobile。优先使用兼容 GPU，不可用时回退 CPU；识别过程离线运行。需要 64 位 Windows。",
+  "author": "保益",
+  "version": "v1.0.0",
+  "minBoyVersion": "v12.12",
+  "mainFile": "BoyRecogPaddle.dll"
+}

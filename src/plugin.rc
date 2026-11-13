@@ -1,0 +1,54 @@
+#pragma code_page(65001)
+#include <windows.h>
+#include <commctrl.h>
+#include "settings_ids.h"
+IDD_SETTINGS DIALOGEX 0, 0, 330, 98
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "百度飞桨 — PaddleOCR 设置"
+FONT 9, "Microsoft YaHei UI"
+BEGIN
+ LTEXT "识别模型(&M)：", -1, 12, 14, 75, 12
+ COMBOBOX IDC_MODEL, 90, 11, 226, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | NOT CBS_SORT
+ CONTROL "诊断日志(&D)", IDC_DIAGNOSTICS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 40, 160, 14
+ DEFPUSHBUTTON "确定", IDOK, 185, 64, 61, 22
+ PUSHBUTTON "取消", IDCANCEL, 255, 64, 61, 22
+END
+IDD_PROGRESS DIALOGEX 0, 0, 330, 112
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "模型下载与校验"
+FONT 9, "Microsoft YaHei UI"
+BEGIN
+ LTEXT "准备中……", IDC_STATUS, 12, 12, 304, 38
+ LTEXT "总进度：", -1, 12, 54, 50, 12
+ CONTROL "总进度", IDC_PROGRESS, PROGRESS_CLASS, WS_BORDER, 65, 54, 251, 12
+ PUSHBUTTON "取消", IDCANCEL, 255, 78, 61, 22
+END
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+FILEFLAGS VS_FF_DEBUG
+#else
+FILEFLAGS 0
+#endif
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_DLL
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "080404b0"
+  BEGIN
+   VALUE "FileDescription", "保益悦听 PaddleOCR 识别插件\0"
+   VALUE "FileVersion", "1.0\0"
+   VALUE "InternalName", "BoyRecogPaddle\0"
+   VALUE "OriginalFilename", "BoyRecogPaddle.dll\0"
+   VALUE "ProductName", "百度飞桨\0"
+   VALUE "ProductVersion", "1.0\0"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x0804, 1200
+ END
+END

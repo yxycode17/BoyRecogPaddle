@@ -1,0 +1,69 @@
+cmake_minimum_required(VERSION 3.24)
+project(BoyRecogPaddle LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+if(NOT WIN32)
+  message(FATAL_ERROR "Windows is required")
+endif()
+enable_testing()
+set(PROFILE_PYTHON "${CMAKE_SOURCE_DIR}/.venv/Scripts/python.exe" CACHE FILEPATH "Build-time Python with PyYAML")
+file(GLOB_RECURSE MODEL_CONFIGS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/dist/models/*/inference.yml" "${CMAKE_SOURCE_DIR}/downloads/models/*/inference.yml")
+add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/generated/model_hashes.hpp"
+  COMMAND "${PROFILE_PYTHON}" "${CMAKE_SOURCE_DIR}/tools/generate_native_profiles.py" "${CMAKE_BINARY_DIR}/generated/model_hashes.hpp"
+  DEPENDS tools/generate_native_profiles.py tools/prepare_models.py models.lock.json ${MODEL_CONFIGS}
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
+add_custom_target(model_profiles DEPENDS "${CMAKE_BINARY_DIR}/generated/model_hashes.hpp")
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  enable_language(RC)
+  add_library(BoyRecogPaddle SHARED src/plugin.cpp src/settings.cpp src/plugin.def src/plugin.rc)
+  add_dependencies(BoyRecogPaddle model_profiles)
+  target_include_directories(BoyRecogPaddle PRIVATE "${CMAKE_BINARY_DIR}/generated")
+  target_compile_options(BoyRecogPaddle PRIVATE /W4 /utf-8)
+  target_compile_definitions(BoyRecogPaddle PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
+  target_link_libraries(BoyRecogPaddle PRIVATE bcrypt shell32 ole32 advapi32 winhttp comctl32)
+  add_executable(plugin_test tools/test_plugin.cpp)
+  add_dependencies(plugin_test BoyRecogPaddle)
+  target_compile_options(plugin_test PRIVATE /W4 /utf-8 /UNDEBUG)
+  target_compile_definitions(plugin_test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(plugin_test PRIVATE shell32 ole32 version)
+  target_include_directories(plugin_test PRIVATE "${CMAKE_BINARY_DIR}/generated")
+  add_executable(settings_test tools/test_settings.cpp src/plugin.cpp src/plugin.rc)
+  add_dependencies(settings_test model_profiles)
+  target_include_directories(settings_test PRIVATE "${CMAKE_BINARY_DIR}/generated")
+  target_compile_options(settings_test PRIVATE /W4 /utf-8 /UNDEBUG)
+  target_compile_definitions(settings_test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
+  target_link_libraries(settings_test PRIVATE bcrypt shell32 ole32 advapi32 winhttp comctl32)
+  return()
+endif()
+set(ORT_DIR "${CMAKE_SOURCE_DIR}/third_party/ort-directml-1.24.4" CACHE PATH "ONNX Runtime DirectML package")
+set(DML_DIR "${CMAKE_SOURCE_DIR}/third_party/directml-1.15.4" CACHE PATH "DirectML package")
+add_executable(model_probe tools/model_probe.cpp)
+target_compile_options(model_probe PRIVATE /W4 /utf-8)
+target_compile_definitions(model_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_include_directories(model_probe PRIVATE "${ORT_DIR}/build/native/include" "${DML_DIR}/include")
+target_link_libraries(model_probe PRIVATE "${ORT_DIR}/runtimes/win-x64/native/onnxruntime.lib" dxgi d3d12)
+add_custom_command(TARGET model_probe POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ORT_DIR}/runtimes/win-x64/native/onnxruntime.dll" "$<TARGET_FILE_DIR:model_probe>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ORT_DIR}/runtimes/win-x64/native/onnxruntime_providers_shared.dll" "$<TARGET_FILE_DIR:model_probe>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${DML_DIR}/bin/x64-win/DirectML.dll" "$<TARGET_FILE_DIR:model_probe>")
+enable_testing()
+add_test(NAME small_cpu COMMAND model_probe "${CMAKE_SOURCE_DIR}/dist/models/PP-OCRv6/small" cpu)
+
+# 以下依赖仅属于 x64 worker。
+set(OPENCV_DIR "${CMAKE_SOURCE_DIR}/third_party/opencv-5.0.0" CACHE PATH "OpenCV 5.0.0 x64 MD/MDd build")
+add_executable(PaddleOcrWorker src/worker.cpp src/ocr.cpp third_party/clipper/cpp/clipper.cpp)
+add_dependencies(PaddleOcrWorker model_profiles)
+set_source_files_properties(third_party/clipper/cpp/clipper.cpp PROPERTIES COMPILE_OPTIONS "/wd4828;/wd4456")
+target_compile_options(PaddleOcrWorker PRIVATE /W4 /utf-8)
+target_compile_definitions(PaddleOcrWorker PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
+target_include_directories(PaddleOcrWorker PRIVATE "${CMAKE_BINARY_DIR}/generated" third_party/clipper/cpp)
+target_include_directories(PaddleOcrWorker SYSTEM PRIVATE "${OPENCV_DIR}/include" "${ORT_DIR}/build/native/include" "${DML_DIR}/include")
+target_link_libraries(PaddleOcrWorker PRIVATE "${ORT_DIR}/runtimes/win-x64/native/onnxruntime.lib"
+  "${OPENCV_DIR}/lib/opencv_world500$<$<CONFIG:Debug>:d>.lib" dxgi d3d12 bcrypt shell32 ole32 advapi32 delayimp)
+target_link_options(PaddleOcrWorker PRIVATE /DELAYLOAD:onnxruntime.dll "/DELAYLOAD:opencv_world500$<$<CONFIG:Debug>:d>.dll" /DEPENDENTLOADFLAG:0xA00)
+add_custom_command(TARGET PaddleOcrWorker POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ORT_DIR}/runtimes/win-x64/native/onnxruntime.dll" "$<TARGET_FILE_DIR:PaddleOcrWorker>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ORT_DIR}/runtimes/win-x64/native/onnxruntime_providers_shared.dll" "$<TARGET_FILE_DIR:PaddleOcrWorker>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${DML_DIR}/bin/x64-win/DirectML.dll" "$<TARGET_FILE_DIR:PaddleOcrWorker>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENCV_DIR}/bin/opencv_world500$<$<CONFIG:Debug>:d>.dll" "$<TARGET_FILE_DIR:PaddleOcrWorker>")
