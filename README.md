@@ -54,7 +54,7 @@ cmake --build build-x86 --config Release
 
 版本号必须同步维护：`src/plugin.rc`（插件 DLL）、`src/worker.rc`（worker EXE）的 `FILEVERSION`、`PRODUCTVERSION`、`FileVersion`、`ProductVersion`，以及发布包 `dist/info.json` 的 `version`。当前字符串版本为 `1.1.0`，数值版本为 `1,1,0,0`，包版本为 `v1.1.0`；后续升级必须表达同一个版本，不能只更新其中一处。发布前检查实际 DLL/EXE 的版本资源与包元数据是否一致。
 
-**所有最终分发文件必须归集到 `dist/`，发布时直接打包该目录内容。** 不得要求终端用户从 build、third_party 或开发机补文件。`dist/` 保留在本地，不纳入 Git。
+**所有最终分发文件必须归集到 `dist/`，发布时直接打包该目录内容。** 不得要求终端用户从 build、third_party 或开发机补文件。`dist/` 仅跟踪商店元数据 `info.json`，其余发布文件保留在本地，不纳入 Git。
 
 ```powershell
 ./tools/stage_worker.ps1
@@ -77,7 +77,7 @@ dist/
   worker-files.json
 ```
 
-归集脚本不生成商店元数据 `info.json` 和发布说明，打包者需另行准备。x86 DLL 的 CRT 由读屏宿主及其安装程序提供；x64 worker 的 Release CRT 随包分发。终端不需要 Python 或 Visual Studio。打包前验证依赖、许可证及默认模型离线可用性。
+商店元数据 `info.json` 随仓库维护；归集脚本不生成发布说明，打包者需另行准备。x86 DLL 的 CRT 由读屏宿主及其安装程序提供；x64 worker 的 Release CRT 随包分发。终端不需要 Python 或 Visual Studio。打包前验证依赖、许可证及默认模型离线可用性。
 
 ## 配置和日志
 

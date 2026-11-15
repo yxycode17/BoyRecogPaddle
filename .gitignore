@@ -8,7 +8,8 @@ third_party/
 *.user
 *.suo
 __pycache__/
-dist/
+dist/*
+!dist/info.json
 AGENTS.md
 worker协议.md
 开发进度.md
