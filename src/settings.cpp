@@ -162,7 +162,7 @@ INT_PTR CALLBACK Procedure(HWND window,UINT message,WPARAM w,LPARAM l){
     try{
         if(message==WM_INITDIALOG){
             dialog=reinterpret_cast<Dialog*>(l);SetWindowLongPtrW(window,DWLP_USER,l);
-            const wchar_t* labels[]={L"PP-OCRv6 tiny — 速度优先",L"PP-OCRv6 small — 均衡（随包）",L"PP-OCRv6 medium — 较大模型",L"PP-OCRv5 mobile"};
+            const wchar_t* labels[]={L"v6 tiny — 速度优先",L"v6 small — 均衡",L"v6 medium — 较大模型",L"v5 mobile — 轻量"};
             for(auto label:labels)SendDlgItemMessageW(window,IDC_MODEL,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label));
             Selection current;try{current=ReadSelection(dialog->paths);dialog->originalChoice=current;dialog->originalValid=true;}catch(...){PluginLog("Invalid settings; model selection must be repaired");}
             int index=1;for(int i=0;i<4;++i)if(current.family==choices[i].family&&current.tier==choices[i].tier)index=i;

@@ -11,9 +11,7 @@ foreach($name in @('msvcp140.dll','vcruntime140.dll','concrt140.dll')){
     if([IO.Path]::GetDirectoryName($obsolete) -ne [IO.Path]::GetFullPath($destination)){throw 'Invalid obsolete CRT path'}
     if(Test-Path -LiteralPath $obsolete){Remove-Item -LiteralPath $obsolete -ErrorAction Stop}
 }
-$entries=@($sources | ForEach-Object {
-    $target=Join-Path $destination (Split-Path $_ -Leaf)
-    [pscustomobject]@{file=(Split-Path $target -Leaf);size=(Get-Item -LiteralPath $target).Length;sha256=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()}
-})
-ConvertTo-Json -InputObject $entries | Set-Content (Join-Path $destination 'plugin-files.json') -Encoding utf8
+# DLL 在归集后签名，不生成签名前的文件哈希清单。
+$obsoleteManifest=Join-Path $destination 'plugin-files.json'
+if(Test-Path -LiteralPath $obsoleteManifest){Remove-Item -LiteralPath $obsoleteManifest}
 Write-Output 'Staged x86 plugin; host supplies x86 CRT. Use stage_worker.ps1 for bundled x64 dependencies.'

@@ -20,27 +20,7 @@ foreach ($source in $sources) { Copy-Item -LiteralPath $source -Destination $des
 $obsolete = [IO.Path]::GetFullPath((Join-Path $destination 'opencv_world4100.dll'))
 if ([IO.Path]::GetDirectoryName($obsolete) -ne [IO.Path]::GetFullPath($destination)) { throw 'Invalid obsolete runtime path' }
 if (Test-Path -LiteralPath $obsolete) { Remove-Item -LiteralPath $obsolete }
-$licenses = @{
-    'opencv/LICENSE'='third_party/opencv-5.0.0/LICENSE'
-    'paddleocr/LICENSE'='third_party/paddleocr-3.7.0/LICENSE'
-    'clipper/LICENSE.txt'='third_party/clipper/License.txt'
-    'onnxruntime/LICENSE'='third_party/ort-directml-1.24.4/LICENSE'
-    'onnxruntime/ThirdPartyNotices.txt'='third_party/ort-directml-1.24.4/ThirdPartyNotices.txt'
-    'directml/LICENSE.txt'='third_party/directml-1.15.4/LICENSE.txt'
-    'directml/LICENSE-CODE.txt'='third_party/directml-1.15.4/LICENSE-CODE.txt'
-    'directml/ThirdPartyNotices.txt'='third_party/directml-1.15.4/ThirdPartyNotices.txt'
-}
-foreach ($entry in $licenses.GetEnumerator()) {
-    $target = Join-Path $root ('dist/licenses/' + $entry.Key)
-    New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
-    Copy-Item -LiteralPath (Join-Path $root $entry.Value) -Destination $target -Force
-}
-$opencvNotices = Join-Path $root 'third_party/opencv-5.0.0/etc/licenses'
-if (!(Test-Path -LiteralPath $opencvNotices)) { throw 'OpenCV installed third-party notices are missing' }
-Get-ChildItem -LiteralPath $opencvNotices -File | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $root 'dist/licenses/opencv') -Force
-}
-Copy-Item -LiteralPath (Join-Path $root 'third_party/opencv-5.0.0/build-configuration.log') -Destination (Join-Path $root 'dist/licenses/opencv/build-configuration.log') -Force
+& (Join-Path $PSScriptRoot 'stage_licenses.ps1')
 $manifest = Get-Content (Join-Path $root 'models.lock.json') -Raw | ConvertFrom-Json
 $manifest.models = @($manifest.models | Where-Object { $_.release_enabled })
 $manifest | ConvertTo-Json -Depth 20 | Set-Content (Join-Path $root 'dist/models.lock.json') -Encoding utf8
@@ -53,7 +33,7 @@ foreach ($model in ($manifest.models | Where-Object { $_.role -eq 'det' })) {
     New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
     Copy-Item -LiteralPath $profile -Destination $target -Force
 }
-Get-ChildItem -LiteralPath $destination -File | ForEach-Object {
-    [pscustomobject]@{ file=$_.Name; size=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
-} | ConvertTo-Json | Set-Content (Join-Path $root 'dist/worker-files.json') -Encoding utf8
+# EXE/DLL 在归集后签名，不生成签名前的文件哈希清单。
+$obsoleteManifest=Join-Path $root 'dist/worker-files.json'
+if(Test-Path -LiteralPath $obsoleteManifest){Remove-Item -LiteralPath $obsoleteManifest}
 Write-Output 'Staged Release worker and runtime files. Final acceptance remains separate.'

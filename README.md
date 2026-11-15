@@ -71,10 +71,8 @@ dist/
   worker/                 x64 EXE、ORT、DirectML、OpenCV 和 x64 CRT
   models/PP-OCRv6/small/   默认模型、字典和配置
   profiles/               可选模型的配套配置
-  licenses/               第三方及模型许可证
+  LICENSE.txt             项目 MIT 与第三方及模型许可合并文件
   models.lock.json
-  plugin-files.json
-  worker-files.json
 ```
 
 商店元数据 `info.json` 随仓库维护；归集脚本不生成发布说明，打包者需另行准备。x86 DLL 的 CRT 由读屏宿主及其安装程序提供；x64 worker 的 Release CRT 随包分发。终端不需要 Python 或 Visual Studio。打包前验证依赖、许可证及默认模型离线可用性。
@@ -90,3 +88,7 @@ dist/
 ## 参与开发
 
 可通过 Fork 和 Pull Request 提交修改。修改识别流程时请验证 CPU/GPU 结果、原图坐标和模型复用；修改设置或下载流程时请验证取消、失败和旧配置保留。不要提交模型、运行库、用户配置、日志或测试图片。
+
+## 授权
+
+项目原创代码采用 MIT，见根目录 LICENSE。第三方库及模型沿用各自许可；tools/stage_licenses.ps1 将完整条款与声明合并为 dist/LICENSE.txt，相同文本只保留一份，不将第三方内容重新授权为 MIT。
