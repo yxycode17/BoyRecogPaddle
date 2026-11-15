@@ -18,14 +18,14 @@ if(!(Test-Path -LiteralPath $archive)) {
 }
 if((Get-FileHash -LiteralPath $archive).Hash -ne $expected){throw 'OpenCV source SHA256 mismatch'}
 if(!(Test-Path -LiteralPath (Join-Path $source 'CMakeLists.txt'))){Expand-Archive -LiteralPath $archive -DestinationPath (Split-Path $source)}
-# PNG 是已承诺的输入格式，只构建需要的图像/几何模块；IPP 保留 CPU 加速。
+# PNG 是已承诺的输入格式；关闭 IPP 缩小分发体积，已验证四种模型结果及耗时。
 & $cmake -S $source -B $build -G 'Visual Studio 17 2022' -A x64 `
     '-DCMAKE_ASM_COMPILER:FILEPATH=NOTFOUND' `
     "-DCMAKE_INSTALL_PREFIX=$install" '-DOPENCV_BIN_INSTALL_PATH=bin' '-DOPENCV_LIB_INSTALL_PATH=lib' '-DOPENCV_INCLUDE_INSTALL_PATH=include' `
     '-DCMAKE_CXX_STANDARD=17' '-DBUILD_WITH_STATIC_CRT=OFF' '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>DLL' `
     '-DBUILD_LIST=core,imgproc,imgcodecs,geometry,world' '-DBUILD_opencv_world=ON' '-DBUILD_SHARED_LIBS=ON' `
     '-DBUILD_TESTS=OFF' '-DBUILD_PERF_TESTS=OFF' '-DBUILD_EXAMPLES=OFF' '-DBUILD_opencv_apps=OFF' '-DBUILD_JAVA=OFF' '-DBUILD_opencv_highgui=OFF' `
-    '-DWITH_IPP=ON' '-DWITH_OPENCL=OFF' '-DWITH_ITT=OFF' '-DWITH_LAPACK=OFF' '-DWITH_EIGEN=OFF' `
+    '-DWITH_IPP=OFF' '-DWITH_OPENCL=OFF' '-DWITH_ITT=OFF' '-DWITH_LAPACK=OFF' '-DWITH_EIGEN=OFF' `
     '-DWITH_PNG=ON' '-DBUILD_PNG=ON' '-DBUILD_ZLIB=ON' '-DWITH_JPEG=OFF' '-DWITH_TIFF=OFF' '-DWITH_WEBP=OFF' `
     '-DWITH_OPENJPEG=OFF' '-DWITH_JASPER=OFF' '-DWITH_OPENEXR=OFF' '-DWITH_AVIF=OFF' '-DWITH_GIF=OFF' '-DWITH_FFMPEG=OFF' '-DWITH_UNIFONT=OFF' `
     '-DWITH_GSTREAMER=OFF' '-DWITH_VTK=OFF' '-DWITH_PROTOBUF=OFF' '-DOPENCV_DNN_OPENVINO=OFF' `
