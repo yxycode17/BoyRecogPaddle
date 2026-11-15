@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(BoyRecogPaddle LANGUAGES CXX)
+project(BoyRecogPaddle LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -15,7 +15,6 @@ add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/generated/model_hashes.hpp"
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
 add_custom_target(model_profiles DEPENDS "${CMAKE_BINARY_DIR}/generated/model_hashes.hpp")
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-  enable_language(RC)
   add_library(BoyRecogPaddle SHARED src/plugin.cpp src/settings.cpp src/plugin.def src/plugin.rc)
   add_dependencies(BoyRecogPaddle model_profiles)
   target_include_directories(BoyRecogPaddle PRIVATE "${CMAKE_BINARY_DIR}/generated")
@@ -52,7 +51,7 @@ add_test(NAME small_cpu COMMAND model_probe "${CMAKE_SOURCE_DIR}/dist/models/PP-
 
 # 以下依赖仅属于 x64 worker。
 set(OPENCV_DIR "${CMAKE_SOURCE_DIR}/third_party/opencv-5.0.0" CACHE PATH "OpenCV 5.0.0 x64 MD/MDd build")
-add_executable(PaddleOcrWorker src/worker.cpp src/ocr.cpp third_party/clipper/cpp/clipper.cpp)
+add_executable(PaddleOcrWorker src/worker.cpp src/worker.rc src/ocr.cpp third_party/clipper/cpp/clipper.cpp)
 add_dependencies(PaddleOcrWorker model_profiles)
 set_source_files_properties(third_party/clipper/cpp/clipper.cpp PROPERTIES COMPILE_OPTIONS "/wd4828;/wd4456")
 target_compile_options(PaddleOcrWorker PRIVATE /W4 /utf-8)

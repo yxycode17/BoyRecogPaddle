@@ -1,6 +1,6 @@
 # 百度飞桨
 
-基于 PaddleOCR 的保益悦听本地文字识别插件，插件版本为 1.0，唯一引擎名称为 `PaddleOCR`。
+基于 PaddleOCR 的保益悦听本地文字识别插件，插件版本为 1.1.0，唯一引擎名称为 `PaddleOCR`。
 
 ## 功能
 
@@ -51,6 +51,8 @@ cmake --build build-x86 --config Release
 测试与基准工具位于 `tools/`，包括宿主 ABI、模型验证、设置、管道生命周期、诊断开关和旋转坐标测试。Python 性能测试所需依赖列在 `tools/requirements-benchmark.txt` 中；测试图片由开发者自行提供。
 
 ## 发布约定
+
+版本号必须同步维护：`src/plugin.rc`（插件 DLL）、`src/worker.rc`（worker EXE）的 `FILEVERSION`、`PRODUCTVERSION`、`FileVersion`、`ProductVersion`，以及发布包 `dist/info.json` 的 `version`。当前字符串版本为 `1.1.0`，数值版本为 `1,1,0,0`，包版本为 `v1.1.0`；后续升级必须表达同一个版本，不能只更新其中一处。发布前检查实际 DLL/EXE 的版本资源与包元数据是否一致。
 
 **所有最终分发文件必须归集到 `dist/`，发布时直接打包该目录内容。** 不得要求终端用户从 build、third_party 或开发机补文件。`dist/` 保留在本地，不纳入 Git。
 

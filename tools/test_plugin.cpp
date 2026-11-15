@@ -50,7 +50,7 @@ int wmain(int argc,wchar_t** argv){
     auto path=install/L"BoyRecogPaddle.dll";
     DWORD ignored=0;auto bytes=GetFileVersionInfoSizeW(path.c_str(),&ignored);assert(bytes);std::vector<char> version(bytes);assert(GetFileVersionInfoW(path.c_str(),0,bytes,version.data()));
     LPVOID value=nullptr;UINT len=0;assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductName",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"百度飞桨");
-    assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductVersion",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"1.0");
+    assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductVersion",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"1.1.0");
     HMODULE dll=LoadLibraryExW(path.c_str(),nullptr,LOAD_WITH_ALTERED_SEARCH_PATH);assert(dll);
     auto init=Load<decltype(&BoyRecogInit)>(dll,"BoyRecogInit"),uninit=Load<decltype(&BoyRecogUninit)>(dll,"BoyRecogUninit");
     auto list=Load<decltype(&BoyRecogGetEngineList)>(dll,"BoyRecogGetEngineList");
