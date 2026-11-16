@@ -51,6 +51,12 @@ add_test(NAME small_cpu COMMAND model_probe "${CMAKE_SOURCE_DIR}/dist/models/PP-
 
 # 以下依赖仅属于 x64 worker。
 set(OPENCV_DIR "${CMAKE_SOURCE_DIR}/third_party/opencv-5.0.0" CACHE PATH "OpenCV 5.0.0 x64 MD/MDd build")
+add_executable(character_boxes_test tools/test_character_boxes.cpp)
+target_compile_options(character_boxes_test PRIVATE /W4 /utf-8 /UNDEBUG)
+target_include_directories(character_boxes_test SYSTEM PRIVATE "${OPENCV_DIR}/include")
+target_link_libraries(character_boxes_test PRIVATE "${OPENCV_DIR}/lib/opencv_world500$<$<CONFIG:Debug>:d>.lib")
+add_dependencies(character_boxes_test PaddleOcrWorker)
+add_test(NAME character_boxes COMMAND character_boxes_test)
 add_executable(PaddleOcrWorker src/worker.cpp src/worker.rc src/ocr.cpp third_party/clipper/cpp/clipper.cpp)
 add_dependencies(PaddleOcrWorker model_profiles)
 set_source_files_properties(third_party/clipper/cpp/clipper.cpp PROPERTIES COMPILE_OPTIONS "/wd4828;/wd4456")

@@ -54,7 +54,7 @@ def main():
             xs, ys = zip(*item['box'])
             expected.append(dict(rect=[min(xs), min(ys), min(max(xs)+1, reference['image_shape'][1]),
                                        min(max(ys)+1, reference['image_shape'][0])], text=item['text']))
-        actual = values['gpu']['result']['items']
+        actual = [dict(rect=x['rect'], text=x['text']) for x in values['gpu']['result']['items']]
         values['python_reference_exact'] = actual == expected
         values['reference_counts'] = [len(expected), len(actual)]
         # 框相同的项目逐项对照，不能把阅读顺序变化误算为所有文字不同。

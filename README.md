@@ -1,6 +1,6 @@
 # 百度飞桨
 
-基于 PaddleOCR 的保益悦听本地文字识别插件，插件版本为 1.2，唯一引擎名称为 `PaddleOCR`。
+基于 PaddleOCR 的保益悦听本地文字识别插件，插件版本为 1.3，唯一引擎名称为 `PaddleOCR`。
 
 ## 功能
 
@@ -52,7 +52,7 @@ cmake --build build-x86 --config Release
 
 ## 发布约定
 
-版本号必须同步维护：`src/plugin.rc`（插件 DLL）、`src/worker.rc`（worker EXE）的 `FILEVERSION`、`PRODUCTVERSION`、`FileVersion`、`ProductVersion`，以及发布包 `dist/info.json` 的 `version`。当前字符串版本为 `1.2`，数值版本为 `1,2,0,0`，包版本为 `v1.2.0`；后续升级必须表达同一个版本，不能只更新其中一处。发布前检查实际 DLL/EXE 的版本资源与包元数据是否一致。
+版本号必须同步维护：`src/plugin.rc`（插件 DLL）、`src/worker.rc`（worker EXE）的 `FILEVERSION`、`PRODUCTVERSION`、`FileVersion`、`ProductVersion`，以及发布包 `dist/info.json` 的 `version`。当前字符串版本为 `1.3`，数值版本为 `1,3,0,0`，包版本为 `v1.3.0`；后续升级必须表达同一个版本，不能只更新其中一处。发布前检查实际 DLL/EXE 的版本资源与包元数据是否一致。
 
 **所有最终分发文件必须归集到 `dist/`，发布时直接打包该目录内容。** 不得要求终端用户从 build、third_party 或开发机补文件。`dist/` 仅跟踪商店元数据 `info.json`，其余发布文件保留在本地，不纳入 Git。
 
@@ -98,3 +98,13 @@ GPU 识别批量通过 D3D12 查询 UMA 架构：核显共享内存架构按可�
 ## 授权
 
 项目原创代码采用 MIT，见根目录 LICENSE。第三方库及模型沿用各自许可；tools/stage_licenses.ps1 将完整条款与声明合并为 dist/LICENSE.txt，相同文本只保留一份，不将第三方内容重新授权为 MIT。
+
+## 字符位置（1.3）
+
+2026-11-16 核对 [PaddleOCR v3.7.0 CTC 解码实现](https://github.com/PaddlePaddle/PaddleOCR/blob/v3.7.0/ppocr/postprocess/rec_postprocess.py)：官方保留解码列位置用于词框；本插件按宿主字符接口输出单个 Unicode 字符，并采用下面的区间估计与回退方式。
+
+结构化结果仍按文本检测框返回（通常为一行），同时通过 `BoyRecogCharInfo` 返回字符及原图坐标。直接复用当前 CTC 解码的时间区间，以相邻字符中心的中点划界，扣除识别输入的右侧补边，再逆变换裁切、透视和纵向文本旋转；不增加模型推理。位置是对齐估计，不是精确字形边界。多字符词条在自身区间内均分，整行对齐不可靠时整行均分；UTF-16 代理对保持完整。
+
+内部管道升级为 `BPR2`（magic `0x32525042`）。每个文字项目原有字段后增加 `character_count`，随后各字符依次为五个 uint32 小端字段 `left/top/right/bottom/text_utf8_length` 和 UTF-8 字节。DLL 校验字符、矩形和拼接文字后再回调。升级需同时替换 DLL 和 worker，新旧协议不兼容。
+
+字符几何检查：`cmake --build build --config Release --target character_boxes_test`，然后 `ctest --test-dir build -C Release -R character_boxes --output-on-failure`。管道和宿主回调的字符数组验证分别在 `tools/test_native_worker.py`、`tools/test_plugin.cpp` 中。

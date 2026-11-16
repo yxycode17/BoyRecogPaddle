@@ -2,6 +2,7 @@
 // Licensed under Apache-2.0: http://www.apache.org/licenses/LICENSE-2.0
 // Distributed AS IS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
 #include "ocr.hpp"
+#include "character_boxes.hpp"
 #include "model_hashes.hpp"
 #include "model_verify.hpp"
 #include "diagnostics.hpp"
@@ -267,14 +268,19 @@ struct Ocr::Impl {
         auto boxes=Detect(image);
         auto cropStart=DiagnosticClock::now();
         OcrResult result{image.cols,image.rows,{}}; result.items.resize(boxes.size());
-        std::vector<cv::Mat> crops;
+        std::vector<cv::Mat> crops, inverses;
         for(size_t i=0;i<boxes.size();++i){
             const auto& b=boxes[i];
             int w=static_cast<int>(std::max(cv::norm(b[0]-b[1]),cv::norm(b[2]-b[3])));
             int h=static_cast<int>(std::max(cv::norm(b[0]-b[3]),cv::norm(b[1]-b[2])));
             std::vector<cv::Point2f> dest{{0,0},{static_cast<float>(w),0},{static_cast<float>(w),static_cast<float>(h)},{0,static_cast<float>(h)}};
             cv::Mat crop; cv::warpPerspective(image,crop,cv::getPerspectiveTransform(b,dest),{w,h},cv::INTER_CUBIC,cv::BORDER_REPLICATE);
-            if(static_cast<double>(h)/w>=1.5)cv::rotate(crop,crop,cv::ROTATE_90_COUNTERCLOCKWISE);
+            cv::Mat inverse=cv::getPerspectiveTransform(dest,b);
+            if(static_cast<double>(h)/w>=1.5){
+                cv::rotate(crop,crop,cv::ROTATE_90_COUNTERCLOCKWISE);
+                inverse=inverse*cv::Mat(cv::Matx33d(0,-1,w,1,0,0,0,0,1));
+            }
+            inverses.push_back(inverse);
             crops.push_back(std::move(crop));
             result.items[i].quad=b;
             result.items[i].rect=cv::boundingRect(b)&cv::Rect(0,0,image.cols,image.rows);
@@ -303,12 +309,16 @@ struct Ocr::Impl {
             auto output=Run(*rec,input,{static_cast<int64_t>(count),3,recHeight,width},"rec_inference");
             auto decodeStart=DiagnosticClock::now();
             auto shape=output.GetTensorTypeAndShapeInfo().GetShape();
-            if(shape.size()!=3||shape[0]!=static_cast<int64_t>(count)||shape[2]!=static_cast<int64_t>(dictionary.size()))throw std::runtime_error("Invalid CTC shape");
+            if(shape.size()!=3||shape[1]<=0||shape[0]!=static_cast<int64_t>(count)||shape[2]!=static_cast<int64_t>(dictionary.size()))throw std::runtime_error("Invalid CTC shape");
             const auto* data=output.GetTensorData<float>();
-            for(size_t j=0;j<count;++j){auto& item=result.items[order[start+j]];size_t last=0,chars=0;float score=0;
+            for(size_t j=0;j<count;++j){auto& item=result.items[order[start+j]];size_t last=0,chars=0;float score=0;std::vector<CtcSpan> spans;
                 for(int64_t t=0;t<shape[1];++t){auto row=data+(j*shape[1]+t)*dictionary.size();size_t id=std::max_element(row,row+dictionary.size())-row;
-                    if(id && id!=last){item.text+=dictionary[id];score+=row[id];++chars;}last=id;}
+                    if(id && id!=last){item.text+=dictionary[id];score+=row[id];++chars;spans.push_back({dictionary[id],int(t),int(t+1)});}
+                    else if(id)spans.back().end=int(t+1);
+                    last=id;}
                 item.confidence=chars?score/static_cast<float>(chars):0;
+                int cw=std::min(width,static_cast<int>(std::ceil(recHeight*ratio(order[start+j]))));
+                CharacterBoxes(item,spans,int(shape[1]),width,cw,crops[order[start+j]].size(),inverses[order[start+j]]);
             }
             if(diagnostics)log("DIAG stage=ctc_decode ms="+Milliseconds(decodeStart)+" line_start="+std::to_string(start)+" batch="+std::to_string(count));
             start+=count;

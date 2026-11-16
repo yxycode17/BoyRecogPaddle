@@ -119,7 +119,8 @@ void Start(const fs::path& root,const Selection& choice){
         state->modelRoot=root;PluginLog("Worker started pid="+std::to_string(info.dwProcessId));
     }catch(...){state->Stop();throw;}
 }
-struct Item { BoyRecogRect box;std::wstring text; };
+struct Character { BoyRecogRect box;std::wstring text; };
+struct Item { BoyRecogRect box;std::wstring text;std::vector<Character> characters; };
 std::vector<Item> Recognize(const wchar_t* engine,const char* image,size_t size,ULONGLONG queueMs,bool& diagnostics){
     const auto requestStart=GetTickCount64();
     Require(engine&&std::wcscmp(engine,L"PaddleOCR")==0,"Unknown engine");
@@ -140,7 +141,7 @@ std::vector<Item> Recognize(const wchar_t* engine,const char* image,size_t size,
         loadedNow=true;
     }
     try{
-        auto id=++state->request;std::vector<unsigned char> header;Put(header,0x31525042);Put(header,1);Put(header,id);Put(header,static_cast<uint32_t>(size));
+        auto id=++state->request;std::vector<unsigned char> header;Put(header,0x32525042);Put(header,1);Put(header,id);Put(header,static_cast<uint32_t>(size));
         auto diagnostic=[&](const std::string& message){PluginLog("DIAG request_id="+std::to_string(id)+" "+message);};
         if(choice.diagnostics)diagnostic("stage=request model="+std::string(model.family)+"/"+model.tier+" image="+std::to_string(width)+"x"+std::to_string(height)+
             " bytes="+std::to_string(size)+" queue_ms="+std::to_string(queueMs)+" worker_started="+(loadedNow?"1":"0")+" prepare_ms="+Milliseconds(preparationStart));
@@ -149,18 +150,30 @@ std::vector<Item> Recognize(const wchar_t* engine,const char* image,size_t size,
         Transfer(true,header.data(),header.size(),deadline);Transfer(true,const_cast<char*>(image),size,deadline);
         auto sent=DiagnosticClock::now();
         Transfer(false,header.data(),header.size(),deadline);Reader h{header};
-        Require(h.Number()==0x31525042&&h.Number()==0x80000001&&h.Number()==id,"Invalid response header");
+        Require(h.Number()==0x32525042&&h.Number()==0x80000001&&h.Number()==id,"Invalid response header");
         auto length=h.Number();Require(length>=20&&length<=8*1024*1024,"Invalid response size");
         std::vector<unsigned char> payload(length);Transfer(false,payload.data(),payload.size(),deadline);Reader r{payload};
         auto received=DiagnosticClock::now();
         auto status=r.Number(),w=r.Number(),ht=r.Number(),count=r.Number();
-        Require(status<=1&&count<=(length-20)/24,"Invalid response status/count");
+        Require(status<=1&&count<=(length-20)/28,"Invalid response status/count");
         Require(status?count==0:(w==width&&ht==height),"Response image dimensions mismatch");
         std::vector<Item> items;items.reserve(count);
         for(uint32_t i=0;i<count;++i){
             Require(r.Number()==3,"Unsupported result type");auto l=r.Number(),t=r.Number(),right=r.Number(),bottom=r.Number();
             Require(l<right&&t<bottom&&right<=width&&bottom<=height,"Invalid original-image rectangle");
-            items.push_back({{static_cast<int32_t>(l),static_cast<int32_t>(t),static_cast<int32_t>(right),static_cast<int32_t>(bottom)},Wide(r.Text())});
+            items.push_back({{static_cast<int32_t>(l),static_cast<int32_t>(t),static_cast<int32_t>(right),static_cast<int32_t>(bottom)},Wide(r.Text()),{}});
+            auto n=r.Number();Require(n<=(payload.size()-r.pos)/21,"Invalid character count");
+            auto& item=items.back();item.characters.reserve(n);std::wstring joined;
+            for(uint32_t c=0;c<n;++c){
+                auto cl=r.Number(),ct=r.Number(),cr=r.Number(),cb=r.Number();
+                Require(cl>=l&&ct>=t&&cl<cr&&ct<cb&&cr<=right&&cb<=bottom,"Invalid character rectangle");
+                auto text=Wide(r.Text());
+                Require((text.size()==1&&(text[0]<0xd800||text[0]>0xdfff))||
+                    (text.size()==2&&text[0]>=0xd800&&text[0]<=0xdbff&&text[1]>=0xdc00&&text[1]<=0xdfff),"Invalid character text");
+                joined+=text;item.characters.push_back({{int32_t(cl),int32_t(ct),int32_t(cr),int32_t(cb)},std::move(text)});
+            }
+            Require(joined==item.text,"Character text mismatch");
+
         }
         auto error=r.Text();Require(r.pos==payload.size(),"Trailing response bytes");
         Require(status==0&&error.empty(),"Worker recognition failed; see worker log");
@@ -244,7 +257,11 @@ extern "C" int __cdecl BoyRecogOcrText(const wchar_t* engine,const char* image,s
 extern "C" int __cdecl BoyRecogOcrItems(const wchar_t* engine,const char* image,size_t size,int other,BoyRecogItemCallback callback,void* data){
     return Invoke([&]{Require(callback&&other==0,"Invalid callback or unsupported other types");auto queueStart=GetTickCount64();std::lock_guard<std::mutex> lock(recognition);bool diagnostics=false;
         auto items=Recognize(engine,image,size,GetTickCount64()-queueStart,diagnostics);auto deliveryStart=DiagnosticClock::now();
-        for(auto& item:items)callback(3,item.text.c_str(),&item.box,nullptr,0,data);
+        for(auto& item:items){
+            std::vector<BoyRecogCharInfo> characters;characters.reserve(item.characters.size());
+            for(auto& ch:item.characters)characters.push_back({ch.text.c_str(),ch.box});
+            callback(3,item.text.c_str(),&item.box,characters.empty()?nullptr:characters.data(),characters.size(),data);
+        }
         if(diagnostics)PluginLog("DIAG request_id="+std::to_string(state->request)+" stage=callback ms="+Milliseconds(deliveryStart));return 0;});
 }
 extern "C" int __cdecl BoyRecogSettings(const wchar_t* engine){

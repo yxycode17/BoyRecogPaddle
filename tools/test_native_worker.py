@@ -55,9 +55,9 @@ class Client:
         return bytes(result)
 
     def request(self, operation, data=b'', request_id=7):
-        self.send(struct.pack('<IIII', 0x31525042, operation, request_id, len(data))+data)
+        self.send(struct.pack('<IIII', 0x32525042, operation, request_id, len(data))+data)
         magic, op, identity, size = struct.unpack('<IIII', self.read(16))
-        assert (magic, op, identity) == (0x31525042, operation | 0x80000000, request_id)
+        assert (magic, op, identity) == (0x32525042, operation | 0x80000000, request_id)
         assert size <= 8*1024*1024
         body = self.read(size)
         status, width, height, count = struct.unpack_from('<IIII', body)
@@ -68,7 +68,18 @@ class Client:
             text = body[offset:offset+size].decode('utf-8')
             offset += size
             assert kind == 3 and 0 <= left < right <= width and 0 <= top < bottom <= height
-            items.append(dict(rect=[left, top, right, bottom], text=text))
+            n, = struct.unpack_from('<I', body, offset)
+            offset += 4
+            characters = []
+            for _ in range(n):
+                l, t, r, b, size = struct.unpack_from('<IIIII', body, offset)
+                offset += 20
+                ch = body[offset:offset+size].decode('utf-8')
+                offset += size
+                assert len(ch) == 1 and left <= l < r <= right and top <= t < b <= bottom
+                characters.append(dict(rect=[l, t, r, b], text=ch))
+            assert ''.join(ch['text'] for ch in characters) == text
+            items.append(dict(rect=[left, top, right, bottom], text=text, characters=characters))
         size, = struct.unpack_from('<I', body, offset)
         error = body[offset+4:offset+4+size].decode('utf-8')
         assert offset+4+size == len(body)
@@ -134,7 +145,7 @@ def main():
     assert len(list((config/'logs').glob('*.log'))) == 2
     # 推理/模型加载进行中断开，而不是等待下一次读取才退出。
     client = Client(args.exe, config, model)
-    client.send(struct.pack('<IIII', 0x31525042, 1, 9, len(png))+png)
+    client.send(struct.pack('<IIII', 0x32525042, 1, 9, len(png))+png)
     time.sleep(.05)
     start = time.monotonic()
     assert client.close() == 0
@@ -142,7 +153,7 @@ def main():
     # 已加载模型后在第二次真正推理期间断开。
     client = Client(args.exe, config, model, 'cpu')
     assert client.request(1, png)['status'] == 0
-    client.send(struct.pack('<IIII', 0x31525042, 1, 11, len(png))+png)
+    client.send(struct.pack('<IIII', 0x32525042, 1, 11, len(png))+png)
     time.sleep(.05)
     start = time.monotonic()
     assert client.close() == 0
@@ -159,7 +170,7 @@ def main():
         assert client.close() == 0
     # 畸形长度拒绝，不分配巨量负载。
     client = Client(args.exe, config, model)
-    client.send(struct.pack('<IIII', 0x31525042, 1, 10, 0xffffffff))
+    client.send(struct.pack('<IIII', 0x32525042, 1, 10, 0xffffffff))
     assert client.process.wait(timeout=3) != 0
     client.close()
     (base/'result.json').write_text(json.dumps(dict(results=results, disconnect_ms=disconnect_ms,

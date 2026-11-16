@@ -89,10 +89,14 @@ def main():
                 elapsed = (time.perf_counter()-start)*1000
                 assert response['status'] == 0, response['error']
                 assert (response['height'], response['width']) == rotated.shape[:2]
-                mapped = [dict(rect=inverse_rect(item['rect'], angle, width, height), text=item['text'])
+                mapped = [dict(rect=inverse_rect(item['rect'], angle, width, height), text=item['text'],
+                               characters=[dict(text=c['text'],rect=inverse_rect(c['rect'],angle,width,height))
+                                           for c in item['characters']])
                           for item in response['items']]
                 assert all(0 <= x['rect'][0] < x['rect'][2] <= width and
                            0 <= x['rect'][1] < x['rect'][3] <= height for x in mapped)
+                assert all(0 <= c['rect'][0] < c['rect'][2] <= width and
+                           0 <= c['rect'][1] < c['rect'][3] <= height for x in mapped for c in x['characters'])
                 baseline = mapped if angle == 0 else results['0']['mapped_items']
                 results[str(angle)] = dict(response=response, mapped_items=mapped, elapsed_ms=elapsed,
                                           coordinates_in_bounds=True, comparison=compare(baseline, mapped))

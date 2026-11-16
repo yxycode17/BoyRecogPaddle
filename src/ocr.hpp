@@ -6,11 +6,13 @@
 #include <vector>
 #include <opencv2/core.hpp>
 
+struct TextCharacter { std::string text; cv::Rect rect; };
 struct TextItem {
     std::string text;
     cv::Rect rect;
     std::vector<cv::Point2f> quad;
     float confidence = 0;
+    std::vector<TextCharacter> characters;
 };
 struct OcrResult { int width = 0, height = 0; std::vector<TextItem> items; };
 using LogFunction = std::function<void(const std::string&)>;

@@ -5,7 +5,7 @@
   "displayName": "百度飞桨",
   "description": "基于 PaddleOCR 的本地文字识别插件。",
   "author": "保益",
-  "version": "v1.2.0",
+  "version": "v1.3.0",
   "minBoyVersion": "v12.13",
   "mainFile": "BoyRecogPaddle.dll"
 }

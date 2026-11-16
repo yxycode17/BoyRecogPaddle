@@ -68,7 +68,10 @@ static void Write(HANDLE pipe,const std::vector<unsigned char>& data){
 }
 static std::vector<unsigned char> Encode(const OcrResult& result,uint32_t status,const std::string& error){
     std::vector<unsigned char> b;Put(b,status);Put(b,result.width);Put(b,result.height);Put(b,static_cast<uint32_t>(result.items.size()));
-    for(const auto& item:result.items){Put(b,3);Put(b,item.rect.x);Put(b,item.rect.y);Put(b,item.rect.x+item.rect.width);Put(b,item.rect.y+item.rect.height);Text(b,item.text);}
+    for(const auto& item:result.items){Put(b,3);Put(b,item.rect.x);Put(b,item.rect.y);Put(b,item.rect.x+item.rect.width);Put(b,item.rect.y+item.rect.height);Text(b,item.text);
+        Put(b,static_cast<uint32_t>(item.characters.size()));
+        for(const auto& ch:item.characters){Put(b,ch.rect.x);Put(b,ch.rect.y);Put(b,ch.rect.x+ch.rect.width);Put(b,ch.rect.y+ch.rect.height);Text(b,ch.text);}
+    }
     Text(b,error);if(b.size()>8*1024*1024)throw std::runtime_error("Response exceeds limit");return b;
 }
 static bool SameUser(HANDLE process){
@@ -175,7 +178,7 @@ int wmain(int argc,wchar_t** argv){
                 deadline=GetTickCount64()+120000;
                 if(!Read(pipe.value,header.data()+1,header.size()-1))break;
                 uint32_t magic=Get(header.data()),operation=Get(header.data()+4),id=Get(header.data()+8),size=Get(header.data()+12);
-                if(magic!=0x31525042||size>64*1024*1024||operation<1||operation>3||(operation!=1&&size))throw std::runtime_error("Invalid pipe frame");
+                if(magic!=0x32525042||size>64*1024*1024||operation<1||operation>3||(operation!=1&&size))throw std::runtime_error("Invalid pipe frame");
                 activeRequest=id;bool diagnostics=operation==1&&diagnosticsEnabled();auto receivedStart=DiagnosticClock::now();
                 deadline=GetTickCount64()+120000;
                 { // 请求缓冲区在记录驻留内存前销毁；保留模型和推理缓存。
@@ -190,7 +193,7 @@ int wmain(int argc,wchar_t** argv){
                     if(diagnostics)log("DIAG stage=ocr_total ms="+Milliseconds(ocrStart)+" status="+std::to_string(status));
                     auto encodeStart=DiagnosticClock::now();
                     auto body=Encode(result,status,error);std::vector<unsigned char> response;
-                    Put(response,0x31525042);Put(response,operation|0x80000000u);Put(response,id);Put(response,static_cast<uint32_t>(body.size()));
+                    Put(response,0x32525042);Put(response,operation|0x80000000u);Put(response,id);Put(response,static_cast<uint32_t>(body.size()));
                     response.insert(response.end(),body.begin(),body.end());
                     if(diagnostics)log("DIAG stage=response_encode ms="+Milliseconds(encodeStart)+" bytes="+std::to_string(response.size()));
                     auto writeStart=DiagnosticClock::now();Write(pipe.value,response);deadline=0;

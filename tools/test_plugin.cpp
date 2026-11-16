@@ -29,8 +29,17 @@ void KillWorker(){
 struct Output {DWORD thread=GetCurrentThreadId();int calls=0;std::wstring text;std::vector<BoyRecogRect> boxes;};
 void __cdecl Text(const wchar_t* text,void* ptr){auto& out=*static_cast<Output*>(ptr);assert(GetCurrentThreadId()==out.thread&&text);++out.calls;out.text=text;}
 void __cdecl Item(BoyRecogItemType type,const wchar_t* text,const BoyRecogRect* box,const BoyRecogCharInfo* chars,size_t count,void* ptr){
-    auto& out=*static_cast<Output*>(ptr);assert(GetCurrentThreadId()==out.thread&&type==3&&text&&box&&!chars&&!count);
+    auto& out=*static_cast<Output*>(ptr);assert(GetCurrentThreadId()==out.thread&&type==3&&text&&box&&(chars||!count));
     assert(box->left>=0&&box->top>=0&&box->left<box->right&&box->top<box->bottom);
+    std::wstring joined;
+    for(size_t i=0;i<count;++i){
+        assert(chars[i].text);std::wstring ch=chars[i].text;
+        assert(ch.size()==1||(ch.size()==2&&ch[0]>=0xd800&&ch[0]<=0xdbff&&ch[1]>=0xdc00&&ch[1]<=0xdfff));
+        const auto& r=chars[i].box;
+        assert(r.left>=box->left&&r.top>=box->top&&r.left<r.right&&r.top<r.bottom&&r.right<=box->right&&r.bottom<=box->bottom);
+        joined+=ch;
+    }
+    assert(joined==text);
     if(out.calls++)out.text+=L"\r\n";out.text+=text;out.boxes.push_back(*box);
 }
 void __cdecl Engines(const BoyRecogEngineInfo* info,size_t count,void* ptr){auto& out=*static_cast<Output*>(ptr);assert(count==1&&std::wstring(info->name)==L"PaddleOCR"&&info->capabilities==39);assert(out.thread==GetCurrentThreadId());++out.calls;}
@@ -50,7 +59,7 @@ int wmain(int argc,wchar_t** argv){
     auto path=install/L"BoyRecogPaddle.dll";
     DWORD ignored=0;auto bytes=GetFileVersionInfoSizeW(path.c_str(),&ignored);assert(bytes);std::vector<char> version(bytes);assert(GetFileVersionInfoW(path.c_str(),0,bytes,version.data()));
     LPVOID value=nullptr;UINT len=0;assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductName",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"百度飞桨");
-    assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductVersion",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"1.2");
+    assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductVersion",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"1.3");
     HMODULE dll=LoadLibraryExW(path.c_str(),nullptr,LOAD_WITH_ALTERED_SEARCH_PATH);assert(dll);
     auto init=Load<decltype(&BoyRecogInit)>(dll,"BoyRecogInit"),uninit=Load<decltype(&BoyRecogUninit)>(dll,"BoyRecogUninit");
     auto list=Load<decltype(&BoyRecogGetEngineList)>(dll,"BoyRecogGetEngineList");
