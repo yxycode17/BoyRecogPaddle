@@ -12,7 +12,7 @@ $sources = @(
     'third_party/directml-1.15.4/bin/x64-win/DirectML.dll',
     'third_party/opencv-5.0.0/bin/opencv_world500.dll'
 ) | ForEach-Object { Join-Path $root $_ }
-$sources += @('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll','concrt140.dll') | ForEach-Object { Join-Path $VcRuntime $_ }
+$sources += @('msvcp140.dll','msvcp140_1.dll','vcruntime140.dll','vcruntime140_1.dll','concrt140.dll') | ForEach-Object { Join-Path $VcRuntime $_ }
 foreach ($source in $sources) { if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing dependency: $source" } }
 New-Item -ItemType Directory -Force $destination | Out-Null
 foreach ($source in $sources) { Copy-Item -LiteralPath $source -Destination $destination -Force }

@@ -1,6 +1,7 @@
 """验证诊断开关和分段日志；不记录图片/文字到日志，不写文档目录。"""
 import argparse
 import json
+import re
 from pathlib import Path
 from test_native_worker import Client, ROOT
 
@@ -31,8 +32,10 @@ def main():
             for stage in ('model_verify', 'session_det', 'session_rec', 'warmup_det', 'warmup_rec',
                           'png_decode', 'det_preprocess', 'det_inference', 'det_postprocess',
                           'crop_and_sort', 'rec_preprocess', 'rec_inference', 'ctc_decode',
-                          'ocr_total', 'response_encode', 'pipe_receive', 'pipe_send'):
+                          'ocr_total', 'response_encode', 'pipe_receive', 'pipe_send', 'request_memory'):
                 assert 'stage='+stage in cold, stage
+            memory = re.search(r'stage=request_memory working_set_bytes=(\d+) private_commit_bytes=(\d+)', cold)
+            assert memory and all(int(value) > 0 for value in memory.groups())
             assert 'shape_changed=' in cold and 'run_ms=' in cold and 'request_id=1' in cold
             if mode == 'gpu':
                 assert 'name=' in cold and 'shared_bytes=' in cold
@@ -46,6 +49,7 @@ def main():
             assert client.request(2)['status'] == 0
             resumed = log_path.read_text(encoding='utf-8')
             assert 'DIAG request_id=3 stage=model_ready loaded_now=0' in resumed
+            assert resumed.count('stage=request_memory ') == 2
             assert resumed.count('stage=model_verify begin') == 1
             for item in baseline['items']:
                 if len(item['text']) >= 10 and any('\u4e00' <= c <= '\u9fff' for c in item['text']):

@@ -8,6 +8,7 @@
 #include <windows.h>
 #include <bcrypt.h>
 #include <dxgi1_6.h>
+#include <d3d12.h>
 #include <wrl/client.h>
 #include <onnxruntime_cxx_api.h>
 #include <dml_provider_factory.h>
@@ -24,6 +25,16 @@
 
 namespace fs = std::filesystem;
 using Microsoft::WRL::ComPtr;
+
+static constexpr int GpuBatchLimit(int availableBatch, SIZE_T dedicatedBytes, bool unifiedMemory) {
+    return !unifiedMemory && dedicatedBytes < 4ULL*1024*1024*1024
+        ? std::min(availableBatch, 2) : availableBatch;
+}
+static_assert(GpuBatchLimit(8, 128*1024*1024, true) == 8);
+static_assert(GpuBatchLimit(1, 128*1024*1024, true) == 1);
+static_assert(GpuBatchLimit(8, 2ULL*1024*1024*1024, false) == 2);
+static_assert(GpuBatchLimit(8, 8ULL*1024*1024*1024, false) == 8);
+static_assert(GpuBatchLimit(8, 0, false) == 2);
 
 static std::string ReadText(const fs::path& path) {
     if (fs::file_size(path) > 4 * 1024 * 1024) throw std::runtime_error("Profile too large");
@@ -181,7 +192,20 @@ struct Ocr::Impl {
                 }
                 std::stable_sort(adapters.begin(), adapters.end(), [](auto a, auto b) { return a.first > b.first; });
                 for (auto [bytes, index] : adapters) {
-                    try { Sessions(index); if (bytes && bytes < 4ULL*1024*1024*1024) batch = std::min(batch, 2); return; }
+                    try {
+                        Sessions(index);
+                        ComPtr<IDXGIAdapter1> adapter;
+                        ComPtr<ID3D12Device> gpu;
+                        D3D12_FEATURE_DATA_ARCHITECTURE architecture{};
+                        const bool architectureKnown = SUCCEEDED(factory->EnumAdapters1(index, &adapter))
+                            && SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&gpu)))
+                            && SUCCEEDED(gpu->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture)));
+                        // ponytail: UMA 沿用可用 RAM 批量；未知架构保守限流，长行仍受 128 MiB 输出预算保护。
+                        batch = GpuBatchLimit(batch, bytes, architectureKnown && architecture.UMA);
+                        log("GPU batch_limit="+std::to_string(batch)+" unified_memory="+
+                            (architectureKnown ? (architecture.UMA ? "1" : "0") : "unknown"));
+                        return;
+                    }
                     catch (const std::exception& e) { det.reset(); rec.reset(); log("GPU initialization failed: " + std::string(e.what())); }
                 }
             }

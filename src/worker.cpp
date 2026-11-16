@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <psapi.h>
 #include <shlobj.h>
 #include <filesystem>
 #include <fstream>
@@ -177,22 +178,31 @@ int wmain(int argc,wchar_t** argv){
                 if(magic!=0x31525042||size>64*1024*1024||operation<1||operation>3||(operation!=1&&size))throw std::runtime_error("Invalid pipe frame");
                 activeRequest=id;bool diagnostics=operation==1&&diagnosticsEnabled();auto receivedStart=DiagnosticClock::now();
                 deadline=GetTickCount64()+120000;
-                std::vector<unsigned char> png(size);if(!Read(pipe.value,png.data(),png.size()))break;
-                if(diagnostics)log("DIAG stage=pipe_receive bytes="+std::to_string(size)+" ms="+Milliseconds(receivedStart));
-                OcrResult result;uint32_t status=0;std::string error;
-                auto ocrStart=DiagnosticClock::now();
-                if(operation==1){
-                    try{result=recognize(png,diagnostics);log("OCR completed items="+std::to_string(result.items.size()));}
-                    catch(const std::exception& e){status=1;error=e.what();log("OCR failed: "+error);}
+                { // 请求缓冲区在记录驻留内存前销毁；保留模型和推理缓存。
+                    std::vector<unsigned char> png(size);if(!Read(pipe.value,png.data(),png.size()))break;
+                    if(diagnostics)log("DIAG stage=pipe_receive bytes="+std::to_string(size)+" ms="+Milliseconds(receivedStart));
+                    OcrResult result;uint32_t status=0;std::string error;
+                    auto ocrStart=DiagnosticClock::now();
+                    if(operation==1){
+                        try{result=recognize(png,diagnostics);log("OCR completed items="+std::to_string(result.items.size()));}
+                        catch(const std::exception& e){status=1;error=e.what();log("OCR failed: "+error);}
+                    }
+                    if(diagnostics)log("DIAG stage=ocr_total ms="+Milliseconds(ocrStart)+" status="+std::to_string(status));
+                    auto encodeStart=DiagnosticClock::now();
+                    auto body=Encode(result,status,error);std::vector<unsigned char> response;
+                    Put(response,0x31525042);Put(response,operation|0x80000000u);Put(response,id);Put(response,static_cast<uint32_t>(body.size()));
+                    response.insert(response.end(),body.begin(),body.end());
+                    if(diagnostics)log("DIAG stage=response_encode ms="+Milliseconds(encodeStart)+" bytes="+std::to_string(response.size()));
+                    auto writeStart=DiagnosticClock::now();Write(pipe.value,response);deadline=0;
+                    if(diagnostics)log("DIAG stage=pipe_send ms="+Milliseconds(writeStart));
                 }
-                if(diagnostics)log("DIAG stage=ocr_total ms="+Milliseconds(ocrStart)+" status="+std::to_string(status));
-                auto encodeStart=DiagnosticClock::now();
-                auto body=Encode(result,status,error);std::vector<unsigned char> response;
-                Put(response,0x31525042);Put(response,operation|0x80000000u);Put(response,id);Put(response,static_cast<uint32_t>(body.size()));
-                response.insert(response.end(),body.begin(),body.end());
-                if(diagnostics)log("DIAG stage=response_encode ms="+Milliseconds(encodeStart)+" bytes="+std::to_string(response.size()));
-                auto writeStart=DiagnosticClock::now();Write(pipe.value,response);deadline=0;
-                if(diagnostics)log("DIAG stage=pipe_send ms="+Milliseconds(writeStart));
+                if(diagnostics){
+                    PROCESS_MEMORY_COUNTERS_EX memory{};memory.cb=sizeof(memory);
+                    if(GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory),sizeof(memory)))
+                        log("DIAG stage=request_memory working_set_bytes="+std::to_string(memory.WorkingSetSize)+
+                            " private_commit_bytes="+std::to_string(memory.PrivateUsage));
+                    else log("DIAG stage=request_memory error="+std::to_string(GetLastError()));
+                }
                 if(operation==3)break;
             }
         }catch(const std::exception& e){log("Pipe failure: "+std::string(e.what()));stop=true;watcher.join();throw;}

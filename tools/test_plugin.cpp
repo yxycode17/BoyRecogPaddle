@@ -50,7 +50,7 @@ int wmain(int argc,wchar_t** argv){
     auto path=install/L"BoyRecogPaddle.dll";
     DWORD ignored=0;auto bytes=GetFileVersionInfoSizeW(path.c_str(),&ignored);assert(bytes);std::vector<char> version(bytes);assert(GetFileVersionInfoW(path.c_str(),0,bytes,version.data()));
     LPVOID value=nullptr;UINT len=0;assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductName",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"百度飞桨");
-    assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductVersion",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"1.1.0");
+    assert(VerQueryValueW(version.data(),L"\\StringFileInfo\\080404b0\\ProductVersion",&value,&len));assert(std::wstring(static_cast<wchar_t*>(value))==L"1.2");
     HMODULE dll=LoadLibraryExW(path.c_str(),nullptr,LOAD_WITH_ALTERED_SEARCH_PATH);assert(dll);
     auto init=Load<decltype(&BoyRecogInit)>(dll,"BoyRecogInit"),uninit=Load<decltype(&BoyRecogUninit)>(dll,"BoyRecogUninit");
     auto list=Load<decltype(&BoyRecogGetEngineList)>(dll,"BoyRecogGetEngineList");
@@ -82,6 +82,16 @@ int wmain(int argc,wchar_t** argv){
     {std::ifstream log(config/L"logs/plugin.log");std::string lines{std::istreambuf_iterator<char>(log),{}};
         auto firstValidation=lines.find("Model validated for load ms=");assert(firstValidation!=std::string::npos);
         assert(lines.find("Model validated for load ms=",firstValidation+1)==std::string::npos);}
+    // 切换模型必须结束旧进程，使旧模型及 CPU/GPU 推理缓存随进程释放。
+    LinkTree(source.parent_path()/L"downloads/models/PP-OCRv6/tiny",install/L"models/PP-OCRv6/tiny");
+    for(const wchar_t* tier:{L"tiny",L"small"}){
+        HANDLE previous=OpenProcess(SYNCHRONIZE,FALSE,workers[0]);assert(previous);
+        assert(WritePrivateProfileStringW(L"PaddleOCR",L"tier",tier,diagnosticsIni.c_str()));
+        Output switched;assert(text(L"PaddleOCR",png.data(),png.size(),Text,&switched)==0&&switched.calls==1&&!switched.text.empty());
+        assert(WaitForSingleObject(previous,0)==WAIT_OBJECT_0);CloseHandle(previous);
+        auto current=Children();assert(current.size()==1&&current!=workers);workers=current;
+        if(std::wstring(tier)==L"small")assert(switched.text==first.text);
+    }
     KillWorker();
     Output restarted;assert(text(L"PaddleOCR",png.data(),png.size(),Text,&restarted)==0&&restarted.text==first.text);assert(Children().size()==1&&Children()!=workers);
     auto ini=config/L"settings.ini";assert(WritePrivateProfileStringW(L"PaddleOCR",L"tier",L"missing",ini.c_str()));
@@ -98,6 +108,6 @@ int wmain(int argc,wchar_t** argv){
     Output fallback;assert(text(L"PaddleOCR",png.data(),png.size(),Text,&fallback)==0&&fallback.text==first.text);
     assert(uninit()==0&&Children().empty());assert(uninit()==0);assert(text(L"PaddleOCR",png.data(),png.size(),Text,&invalid)!=0);
     assert(init()==0&&Children().empty());assert(fs::exists(config/L"logs/plugin.previous.log"));assert(uninit()==0);assert(FreeLibrary(dll));
-    std::cout<<"x86 ABI, lazy start, callbacks, concurrency, worker restart, missing model, config, log rotation and unload passed; items="<<first.calls<<'\n';
+    std::cout<<"x86 ABI, lazy start, callbacks, concurrency, model switch process exit, worker restart, missing model, config, log rotation and unload passed; items="<<first.calls<<'\n';
     std::wcout<<L"Test artifacts: "<<install<<L" and "<<config<<'\n';
 }

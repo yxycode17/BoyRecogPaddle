@@ -1,6 +1,6 @@
 # 百度飞桨
 
-基于 PaddleOCR 的保益悦听本地文字识别插件，插件版本为 1.1.0，唯一引擎名称为 `PaddleOCR`。
+基于 PaddleOCR 的保益悦听本地文字识别插件，插件版本为 1.2，唯一引擎名称为 `PaddleOCR`。
 
 ## 功能
 
@@ -52,7 +52,7 @@ cmake --build build-x86 --config Release
 
 ## 发布约定
 
-版本号必须同步维护：`src/plugin.rc`（插件 DLL）、`src/worker.rc`（worker EXE）的 `FILEVERSION`、`PRODUCTVERSION`、`FileVersion`、`ProductVersion`，以及发布包 `dist/info.json` 的 `version`。当前字符串版本为 `1.1.0`，数值版本为 `1,1,0,0`，包版本为 `v1.1.0`；后续升级必须表达同一个版本，不能只更新其中一处。发布前检查实际 DLL/EXE 的版本资源与包元数据是否一致。
+版本号必须同步维护：`src/plugin.rc`（插件 DLL）、`src/worker.rc`（worker EXE）的 `FILEVERSION`、`PRODUCTVERSION`、`FileVersion`、`ProductVersion`，以及发布包 `dist/info.json` 的 `version`。当前字符串版本为 `1.2`，数值版本为 `1,2,0,0`，包版本为 `v1.2.0`；后续升级必须表达同一个版本，不能只更新其中一处。发布前检查实际 DLL/EXE 的版本资源与包元数据是否一致。
 
 **所有最终分发文件必须归集到 `dist/`，发布时直接打包该目录内容。** 不得要求终端用户从 build、third_party 或开发机补文件。`dist/` 仅跟踪商店元数据 `info.json`，其余发布文件保留在本地，不纳入 Git。
 
@@ -84,6 +84,12 @@ dist/
 模型清单随插件更新。选择尚未下载的模型时询问是否下载；拒绝或取消则保留原设置。识别优先加载配置目录中经过验证的所选模型组合，其次加载安装目录的同版本组合。
 
 诊断开关默认关闭，下一次识别生效且不重新加载模型。开启后 `plugin.log` 和 `worker.log` 中的 `DIAG` 记录提供设备与分阶段耗时，不记录图片内容或识别文字。每个程序保留当前日志和一份 `previous.log`；`.lock` 是日志占用锁，无需手工清理。
+
+GPU 识别批量通过 D3D12 查询 UMA 架构：核显共享内存架构按可用系统内存选择最多 8 行，不再因专用显存较小而固定为 2 行；非 UMA 或架构查询失败时，专用显存不足 4 GiB 仍限制为最多 2 行。长文本继续受约 128 MiB 的 CTC 输出预算限制。`worker.log` 的 `GPU batch_limit=... unified_memory=...` 记录最终选择；目标核显上的性能收益需用同一批图片复测。
+
+诊断日志中的 `stage=request_memory` 在每次请求缓冲区释放后记录 worker 驻留内存 `working_set_bytes` 和私有提交量 `private_commit_bytes`，单位均为字节，不等同于 GPU 显存。保留模型和推理内存池以便复用，不强制清空工作集或逐页重建模型。可用 `python tools/test_worker_memory.py D:/share/png --mode gpu`（或 `cpu`）重复同一批图片，分别记录进程内存和进程级 GPU 内存，并检查最后两轮的同页私有提交量增长是否超过容差；该检查不能代替目标机器的长时间验收。
+
+设置中保存另一模型后，在下一次有效识别请求应用选择时结束旧 worker，再启动新 worker；旧模型及其进程内缓存随旧进程退出释放。只保存设置、尚未再次识别时，旧 worker 仍可能驻留。
 
 ## 参与开发
 

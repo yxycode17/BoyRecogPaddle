@@ -30,7 +30,12 @@ class CounterItem(C.Structure):
 
 
 class Sampler:
-    def __init__(self):
+    def __init__(self, pid=None, process_handle=None):
+        # 外部进程句柄由调用方持有，采样器不关闭它。
+        if (pid is None) != (process_handle is None):
+            raise ValueError('pid and process_handle must be specified together')
+        self.pid = os.getpid() if pid is None else pid
+        self.process_handle = -1 if process_handle is None else process_handle
         self.psapi = C.WinDLL('psapi', use_last_error=True)
         self.psapi.GetProcessMemoryInfo.argtypes = [W.HANDLE, C.POINTER(MemoryCounters), W.DWORD]
         self.psapi.GetProcessMemoryInfo.restype = W.BOOL
@@ -76,7 +81,7 @@ class Sampler:
         values = []
         for i in range(count.value):
             item = items[i]
-            if item.name.startswith(f'pid_{os.getpid()}_'):
+            if item.name.startswith(f'pid_{self.pid}_'):
                 if item.value.status not in (0, 1):
                     self.check(item.value.status)
                 values.append(item.value.value)
@@ -85,7 +90,7 @@ class Sampler:
     def sample(self):
         memory = MemoryCounters()
         memory.cb = C.sizeof(memory)
-        if not self.psapi.GetProcessMemoryInfo(W.HANDLE(-1), C.byref(memory), memory.cb):
+        if not self.psapi.GetProcessMemoryInfo(W.HANDLE(self.process_handle), C.byref(memory), memory.cb):
             raise C.WinError(C.get_last_error())
         self.check(self.pdh.PdhCollectQueryData(self.query))
         values = {'working_set': memory.WorkingSetSize, 'private_commit': memory.PrivateUsage,
